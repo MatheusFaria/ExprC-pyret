@@ -23,6 +23,6 @@ operator = +
 - pyret
 
 # Contributors
-Colin Adams (colincadams)
-Matheus de Sousa faria (matheusfaria)
-Ryan Quinlan (rynq)
+- Colin Adams (colincadams)
+- Matheus de Sousa faria (matheusfaria)
+- Ryan Quinlan (rynq)
