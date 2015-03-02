@@ -7,8 +7,11 @@ import option as opt
 # | {operator ExprC ExprC}
 data ExprC:
   | numC(n :: Number)
+  | trueC
+  | falseC
   | binopC(s :: String, l :: ExprC, r :: ExprC)
   | ifC(tes :: ExprC, tru :: ExprC, fals :: ExprC)
+  | lamC(args :: List, body :: ExprC)
 end
 
 # return values
@@ -22,49 +25,69 @@ end
 
 ### Binary Operations ###
 
+fun is-bool-op(op :: String) -> Boolean:
+  (op == "<=") or (op == "eq?")
+end
+
+fun operator(s :: String) -> (Number, Number -> Number):
+  if s == "+":
+    lam(a,b): a + b end
+  else if s == "-":
+    lam(a,b): a - b end
+  else if s == "*":
+    lam(a,b): a * b end
+  else if s == "/":
+    lam(a,b): a / b end
+  else:
+    raise("Not a valid operator")
+  end
+end
+
+fun bool-op(s :: String) -> (Number, Number -> Boolean):
+  if s == "<=":
+    lam(a, b): a <= b end
+  else if s == "eq?":
+    lam(a, b): a == b end
+  else:
+    raise("Not a valid boolean operation")
+  end
+where:
+  bool-op("<=")(2, 3) is true
+  bool-op("eq?")(2, 3) is false
+  bool-op(".")(2, 4) raises "Not a valid boolean operation"
+end
+
 # Sums two values and returns the resulting one
-fun sum-primitive(a :: Value, b :: Value) -> Value:
+fun binop-primitive(a :: Value, b :: Value, s :: String) -> Value:
   if is-numV(a) and is-numV(b):
-    numV(a.n + b.n)
+    if is-bool-op(s):
+      boolV(bool-op(s)(a.n, b.n))
+    else if (s == "/") and (b.n == 0):
+        raise("Division by zero")
+    else:
+      numV(operator(s)(a.n, b.n))
+    end
+  else if s == "eq?":
+    if is-boolV(a) and is-boolV(b):
+      boolV(a.b == b.b)
+    else:
+      boolV(false)
+    end
   else:
-    raise("sum-primitive: Wrong argument type. Expected: two numbers.")
+    raise("Invalid binop primitive")
   end
 where:
-  sum-primitive(numV(3), numV(6)) is numV(9)
-  sum-primitive(boolV(true), numV(6)) raises "Wrong argument type"
+  binop-primitive(numV(1), numV(2), "+") is numV(3)
+  binop-primitive(numV(5), numV(4), "-") is numV(1)
+  binop-primitive(numV(1), numV(2), "*") is numV(2)
+  binop-primitive(numV(4), numV(2), "/") is numV(2)
+  binop-primitive(numV(4), numV(0), "/") raises "Division by zero"
+  binop-primitive(numV(4), numV(2), "eq?") is boolV(false)
+  binop-primitive(numV(2), numV(2), "eq?") is boolV(true)
+  binop-primitive(boolV(true), boolV(false), "eq?") is boolV(false)
+  binop-primitive(boolV(true), numV(3), "eq?") is boolV(false)
+  binop-primitive(boolV(true), numV(3), "+") raises "Invalid binop primitive"
 end
-
-
-# Store all binary operations supported
-binop-table = [dict.string-dict: "+", sum-primitive]
-
-check:
-  binop-table.get("+") satisfies opt.is-some
-  binop-table.get-value("+")(numV(2), numV(5)) is numV(7)
-end
-
-
-# Checks if a string is a binary operation symbol
-fun is-binop(s :: String) -> Boolean:
-  binop-table.keys().member(s)
-where:
-  is-binop("+") is true
-  is-binop("NOT BINOP") is false
-end
-
-# Apply a binop
-fun binop(s :: String, l :: Value, r :: Value) -> Value:
-  if is-binop(s):
-    binop-table.get-value(s)(l, r)
-  else:
-    raise("binop: Not a binop operation")
-  end
-where:
-  binop("+", numV(1), numV(2)) is numV(3)
-  binop("NOT BINOP", numV(3), numV(5)) raises "Not a binop operation"
-end
-
-
 
 
 ### Interpreter ###
@@ -73,8 +96,20 @@ end
 fun interp(exp :: ExprC) -> Value:
   cases(ExprC) exp:
     | numC(n) => numV(n)
-    | binopC(s, l, r) => binop(s, interp(l), interp(r))
-    | ifC(tes, b1, b2) => raise("NOT IMPLEMENTED")
+    | trueC => boolV(true)
+    | falseC => boolV(false)
+    | binopC(s, l, r) => binop-primitive(interp(l), interp(r), s)
+    | ifC(tes, b1, b2) => 
+      interp_tes = interp(tes) 
+      if is-boolV(interp_tes):
+        if interp_tes.b:
+          interp(b1)
+        else:
+          interp(b2)
+        end
+      else:
+        raise("If test is not a boolean")
+      end
   end
 end
 
@@ -83,5 +118,5 @@ end
 check:
   interp(numC(3)) is numV(3)
   interp(binopC("+", numC(3), numC(5))) is numV(8)
-  interp(ifC(numC(1), numC(2), numC(3))) raises "NOT IMPLEMENTED"
+  interp(ifC(trueC, numC(2), numC(3))) is numV(2)
 end
